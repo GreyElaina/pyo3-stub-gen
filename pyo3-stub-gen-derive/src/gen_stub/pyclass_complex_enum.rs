@@ -18,12 +18,50 @@ impl From<&PyComplexEnumInfo> for StubType {
             pyclass_name,
             module,
             enum_type,
+            variants,
             ..
         } = info;
+        let union_terms: Vec<_> = variants
+            .iter()
+            .map(|variant| union_type_for_variant(pyclass_name, variant))
+            .collect();
+        let type_union = (!union_terms.is_empty()).then(|| {
+            let mut iter = union_terms.into_iter();
+            let first = iter.next().unwrap();
+            iter.fold(first, |acc, expr| quote! { (#acc) | (#expr) })
+        });
         Self {
             ty: enum_type.clone(),
             name: pyclass_name.clone(),
             module: module.clone(),
+            type_input_override: type_union.clone(),
+            type_output_override: type_union,
+        }
+    }
+}
+
+fn union_type_for_variant(enum_name: &str, variant: &VariantInfo) -> TokenStream2 {
+    match variant.form {
+        crate::gen_stub::variant::VariantForm::Tuple if variant.constr_args.len() == 1 => {
+            let arg = &variant.constr_args[0];
+            match &arg.r#type {
+                crate::gen_stub::util::TypeOrOverride::RustType { r#type } => {
+                    let ty = r#type;
+                    quote! { <#ty as ::pyo3_stub_gen::PyStubType>::type_input() }
+                }
+                crate::gen_stub::util::TypeOrOverride::OverrideType { type_repr, .. } => {
+                    quote! {
+                        ::pyo3_stub_gen::TypeInfo {
+                            name: #type_repr.to_string(),
+                            import: ::std::collections::HashSet::new(),
+                        }
+                    }
+                }
+            }
+        }
+        _ => {
+            let variant_name = format!("{enum_name}.{}", variant.pyclass_name);
+            quote! { ::pyo3_stub_gen::TypeInfo::unqualified(#variant_name) }
         }
     }
 }

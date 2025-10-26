@@ -24,6 +24,8 @@ impl From<&PyEnumInfo> for StubType {
             ty: enum_type.clone(),
             name: pyclass_name.clone(),
             module: module.clone(),
+            type_input_override: None,
+            type_output_override: None,
         }
     }
 }

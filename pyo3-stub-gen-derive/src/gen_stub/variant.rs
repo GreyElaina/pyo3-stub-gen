@@ -30,14 +30,14 @@ impl ToTokens for VariantForm {
 }
 
 pub struct VariantInfo {
-    pyclass_name: String,
-    module: Option<String>,
-    fields: Vec<MemberInfo>,
-    doc: String,
-    form: VariantForm,
-    constr_args: Vec<ArgInfo>,
-    constr_sig: Option<Signature>,
-    is_mapping: bool,
+    pub(crate) pyclass_name: String,
+    pub(crate) module: Option<String>,
+    pub(crate) fields: Vec<MemberInfo>,
+    pub(crate) doc: String,
+    pub(crate) form: VariantForm,
+    pub(crate) constr_args: Vec<ArgInfo>,
+    pub(crate) constr_sig: Option<Signature>,
+    pub(crate) is_mapping: bool,
 }
 
 impl VariantInfo {
