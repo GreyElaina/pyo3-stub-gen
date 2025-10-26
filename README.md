@@ -149,6 +149,41 @@ impl Config {
 }
 ```
 
+### Enum variants that behave like mappings
+
+PyO3 lets complex enums expose mapping-like variants by combining `#[pyclass(mapping)]` on the enum with `#[pyo3(item)]` on each field. Python sees those variants as dictionaries, so the generated stubs should mirror that shape. When every named field in a variant uses `#[pyo3(item)]`, pyo3-stub-gen now emits a `TypedDict` instead of a nested class, and all references to the variant pick up the dictionary signature automatically.
+
+```rust
+use pyo3::prelude::*;
+use pyo3_stub_gen::derive::*;
+
+#[gen_stub_pyclass_complex_enum]
+#[pyclass(mapping)]
+#[derive(FromPyObject)]
+enum ColorInput {
+    Map {
+        #[pyo3(item)]
+        red: u8,
+        #[pyo3(item)]
+        green: u8,
+        #[pyo3(item)]
+        blue: u8,
+    },
+}
+```
+
+Produces the stub:
+
+```python
+class ColorInput:
+    class Map(typing.TypedDict):
+        red: int
+        green: int
+        blue: int
+```
+
+Any function or method that mentions `ColorInput` now sees the correct `TypedDict` type—no manual `#[gen_stub(override_type(...))]` overrides are required. A complete, runnable example lives in [`examples/pure`](./examples/pure) (see the `ColorMapping` enum).
+
 ## Generate a stub file
 
 And then, create an executable target in [`src/bin/stub_gen.rs`](./examples/pure/src/bin/stub_gen.rs) to generate a stub file:

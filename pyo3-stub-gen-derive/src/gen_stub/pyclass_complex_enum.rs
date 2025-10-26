@@ -134,6 +134,7 @@ mod test {
                             doc: "",
                             default: None,
                             deprecated: None,
+                            item: false,
                         },
                     ],
                     module: None,
@@ -147,6 +148,7 @@ mod test {
                             default: ::pyo3_stub_gen::type_info::ParameterDefault::None,
                         },
                     ],
+                    is_mapping: false,
                 },
                 ::pyo3_stub_gen::type_info::VariantInfo {
                     pyclass_name: "twonum",
@@ -157,6 +159,7 @@ mod test {
                             doc: "",
                             default: None,
                             deprecated: None,
+                            item: false,
                         },
                         ::pyo3_stub_gen::type_info::MemberInfo {
                             name: "_1",
@@ -164,6 +167,7 @@ mod test {
                             doc: "",
                             default: None,
                             deprecated: None,
+                            item: false,
                         },
                     ],
                     module: None,
@@ -189,6 +193,7 @@ mod test {
                             }),
                         },
                     ],
+                    is_mapping: false,
                 },
                 ::pyo3_stub_gen::type_info::VariantInfo {
                     pyclass_name: "ndim",
@@ -199,6 +204,7 @@ mod test {
                             doc: "",
                             default: None,
                             deprecated: None,
+                            item: false,
                         },
                     ],
                     module: None,
@@ -212,6 +218,7 @@ mod test {
                             default: ::pyo3_stub_gen::type_info::ParameterDefault::None,
                         },
                     ],
+                    is_mapping: false,
                 },
                 ::pyo3_stub_gen::type_info::VariantInfo {
                     pyclass_name: "description",
@@ -220,6 +227,7 @@ mod test {
                     doc: "",
                     form: &pyo3_stub_gen::type_info::VariantForm::Unit,
                     constr_args: &[],
+                    is_mapping: false,
                 },
             ],
             module: Some("my_module"),

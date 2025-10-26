@@ -6,7 +6,7 @@ use crate::{
         docstring, indent, GetterDisplay, Import, MemberDef, MethodDef, Parameter,
         ParameterDefault, Parameters, SetterDisplay,
     },
-    stub_type::ImportRef,
+    stub_type::{ImportRef, ModuleRef},
     type_info::*,
     TypeInfo,
 };
@@ -91,6 +91,22 @@ impl From<&PyComplexEnumInfo> for ClassDef {
 
 impl ClassDef {
     fn from_variant(enum_info: &PyComplexEnumInfo, info: &VariantInfo) -> Self {
+        if info.is_mapping {
+            return Self {
+                name: info.pyclass_name,
+                doc: info.doc,
+                attrs: info.fields.iter().map(MemberDef::from).collect(),
+                getter_setters: IndexMap::new(),
+                methods: IndexMap::new(),
+                classes: Vec::new(),
+                bases: vec![TypeInfo::with_module(
+                    "typing.TypedDict",
+                    ModuleRef::from("typing"),
+                )],
+                match_args: None,
+                subclass: true,
+            };
+        }
         let methods = get_variant_methods(enum_info, info);
 
         Self {
@@ -305,5 +321,132 @@ impl fmt::Display for ClassDef {
         }
         writeln!(f)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::any::TypeId;
+
+    fn int_type() -> TypeInfo {
+        TypeInfo::builtin("int")
+    }
+
+    fn leak_members(members: Vec<MemberInfo>) -> &'static [MemberInfo] {
+        Box::leak(members.into_boxed_slice())
+    }
+
+    fn mapping_variant() -> (&'static PyComplexEnumInfo, &'static VariantInfo) {
+        fn dummy_enum_id() -> TypeId {
+            TypeId::of::<()>()
+        }
+        static STRUCT_FORM: VariantForm = VariantForm::Struct;
+        static EMPTY_PARAMS: [ParameterInfo; 0] = [];
+        let members = leak_members(vec![
+            MemberInfo {
+                name: "red",
+                r#type: int_type,
+                doc: "",
+                default: None,
+                deprecated: None,
+                item: true,
+            },
+            MemberInfo {
+                name: "green",
+                r#type: int_type,
+                doc: "",
+                default: None,
+                deprecated: None,
+                item: true,
+            },
+        ]);
+        let variant = Box::leak(Box::new(VariantInfo {
+            pyclass_name: "Map",
+            module: None,
+            doc: "",
+            fields: members,
+            form: &STRUCT_FORM,
+            constr_args: &EMPTY_PARAMS,
+            is_mapping: true,
+        }));
+        let enum_info = Box::leak(Box::new(PyComplexEnumInfo {
+            enum_id: dummy_enum_id,
+            pyclass_name: "ColorInput",
+            module: None,
+            doc: "",
+            variants: std::slice::from_ref(variant),
+        }));
+        (enum_info, variant)
+    }
+
+    fn struct_variant() -> (&'static PyComplexEnumInfo, &'static VariantInfo) {
+        fn dummy_enum_id() -> TypeId {
+            TypeId::of::<(u8,)>()
+        }
+        static STRUCT_FORM: VariantForm = VariantForm::Struct;
+        static EMPTY_PARAMS: [ParameterInfo; 0] = [];
+        let members = leak_members(vec![
+            MemberInfo {
+                name: "red",
+                r#type: int_type,
+                doc: "",
+                default: None,
+                deprecated: None,
+                item: false,
+            },
+            MemberInfo {
+                name: "green",
+                r#type: int_type,
+                doc: "",
+                default: None,
+                deprecated: None,
+                item: false,
+            },
+        ]);
+        let variant = Box::leak(Box::new(VariantInfo {
+            pyclass_name: "Struct",
+            module: None,
+            doc: "",
+            fields: members,
+            form: &STRUCT_FORM,
+            constr_args: &EMPTY_PARAMS,
+            is_mapping: false,
+        }));
+        let enum_info = Box::leak(Box::new(PyComplexEnumInfo {
+            enum_id: dummy_enum_id,
+            pyclass_name: "ColorInput",
+            module: None,
+            doc: "",
+            variants: std::slice::from_ref(variant),
+        }));
+        (enum_info, variant)
+    }
+
+    #[test]
+    fn mapping_variants_render_as_typed_dicts() {
+        let (enum_info, variant) = mapping_variant();
+        let class_def = ClassDef::from_variant(enum_info, variant);
+        let rendered = class_def.to_string();
+        assert!(rendered.contains("class Map(typing.TypedDict):"));
+        assert!(rendered.contains("red: builtins.int"));
+        assert!(
+            !rendered.contains("@typing.final"),
+            "TypedDicts should not be marked final"
+        );
+        assert!(
+            !rendered.contains("__match_args__"),
+            "TypedDict variants skip match args"
+        );
+    }
+
+    #[test]
+    fn struct_variants_remain_regular_classes() {
+        let (enum_info, variant) = struct_variant();
+        let class_def = ClassDef::from_variant(enum_info, variant);
+        let rendered = class_def.to_string();
+        assert!(rendered.contains("@typing.final"));
+        assert!(rendered.contains("class Struct(ColorInput):"));
+        assert!(rendered.contains("__match_args__ = (\"red\", \"green\",)"));
     }
 }

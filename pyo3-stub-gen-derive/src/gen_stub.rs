@@ -18,6 +18,7 @@
 //!                 doc: "",
 //!                 default: None,
 //!                 deprecated: None,
+//!                 item: false,
 //!             },
 //!             MemberInfo {
 //!                 name: "ndim",
@@ -25,6 +26,7 @@
 //!                 doc: "",
 //!                 default: None,
 //!                 deprecated: None,
+//!                 item: false,
 //!             },
 //!             MemberInfo {
 //!                 name: "description",
@@ -32,6 +34,7 @@
 //!                 doc: "",
 //!                 default: None,
 //!                 deprecated: None,
+//!                 item: false,
 //!             },
 //!         ],
 //!         setters: &[],

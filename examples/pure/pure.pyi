@@ -325,7 +325,21 @@ class Shape2:
     class Nothing(Shape2):
         __match_args__ = ()
         def __new__(cls) -> Shape2.Nothing: ...
-    
+
+    ...
+
+class ColorMapping:
+    r"""
+    Example complex enum variant backed by a mapping using `#[pyo3(item)]`
+    """
+    class Map(typing.TypedDict):
+        r"""
+        Variant that behaves like a dict on the Python side
+        """
+        red: builtins.int
+        green: builtins.int
+        blue: builtins.int
+
     ...
 
 @typing.final
@@ -510,4 +524,3 @@ def test_type_ignore_specific() -> builtins.int:  # type: ignore[arg-type,return
     r"""
     Test function with type: ignore for specific rules
     """
-

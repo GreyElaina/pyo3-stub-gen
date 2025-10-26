@@ -115,6 +115,7 @@ pub struct MemberInfo {
     pub doc: &'static str,
     pub default: Option<fn() -> String>,  // Default value for attributes
     pub deprecated: Option<DeprecatedInfo>,
+    pub item: bool,
 }
 ```
 

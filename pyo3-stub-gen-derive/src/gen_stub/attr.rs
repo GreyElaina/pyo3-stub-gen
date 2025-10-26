@@ -127,6 +127,7 @@ pub enum Attr {
     GetAll,
     Set,
     SetAll,
+    Item,
     Module(String),
     Constructor(Signature),
     Signature(Signature),
@@ -205,6 +206,9 @@ pub fn parse_pyo3_attr(attr: &Attribute) -> Result<Vec<Attr>> {
                         }
                         if ident == "set_all" {
                             pyo3_attrs.push(Attr::SetAll);
+                        }
+                        if ident == "item" {
+                            pyo3_attrs.push(Attr::Item);
                         }
                         if ident == "eq" {
                             pyo3_attrs.push(Attr::Eq);

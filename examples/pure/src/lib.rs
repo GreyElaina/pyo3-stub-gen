@@ -281,6 +281,22 @@ enum Shape2 {
     Nothing {},
 }
 
+/// Example complex enum variant backed by a mapping using `#[pyo3(item)]`
+#[gen_stub_pyclass_complex_enum]
+#[pyclass(mapping)]
+#[derive(FromPyObject)]
+enum ColorMapping {
+    /// Variant that behaves like a dict on the Python side
+    Map {
+        #[pyo3(item)]
+        red: u8,
+        #[pyo3(item)]
+        green: u8,
+        #[pyo3(item)]
+        blue: u8,
+    },
+}
+
 #[gen_stub_pymethods]
 #[pymethods]
 impl Number {

@@ -135,6 +135,7 @@ pub struct MemberInfo {
     pub doc: &'static str,
     pub default: Option<fn() -> String>,
     pub deprecated: Option<DeprecatedInfo>,
+    pub item: bool,
 }
 
 /// Info of `#[pymethod]`
@@ -201,6 +202,7 @@ pub struct VariantInfo {
     pub fields: &'static [MemberInfo],
     pub form: &'static VariantForm,
     pub constr_args: &'static [ParameterInfo],
+    pub is_mapping: bool,
 }
 
 /// Info of a `#[pyclass]` with a rich (structured) Rust enum

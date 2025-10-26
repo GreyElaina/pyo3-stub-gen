@@ -37,6 +37,7 @@ pub struct VariantInfo {
     form: VariantForm,
     constr_args: Vec<ArgInfo>,
     constr_sig: Option<Signature>,
+    is_mapping: bool,
 }
 
 impl VariantInfo {
@@ -90,6 +91,9 @@ impl VariantInfo {
         };
 
         let constr_args = members.iter().map(|f| f.clone().into()).collect();
+        let is_mapping = matches!(form, VariantForm::Struct)
+            && !members.is_empty()
+            && members.iter().all(MemberInfo::is_item);
 
         let doc = extract_documents(&attrs).join("\n");
         Ok(Self {
@@ -100,6 +104,7 @@ impl VariantInfo {
             form,
             constr_args,
             constr_sig,
+            is_mapping,
         })
     }
 }
@@ -114,6 +119,7 @@ impl ToTokens for VariantInfo {
             form,
             constr_args,
             constr_sig,
+            is_mapping,
         } = self;
 
         let parameters = if let Some(sig) = constr_sig {
@@ -137,7 +143,56 @@ impl ToTokens for VariantInfo {
                 doc: #doc,
                 form: &pyo3_stub_gen::type_info::VariantForm::#form,
                 constr_args: #parameters,
+                is_mapping: #is_mapping,
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syn::parse_str;
+
+    fn parse_variants(code: &str) -> Vec<VariantInfo> {
+        let item: syn::ItemEnum = parse_str(code).expect("valid enum");
+        item.variants
+            .into_iter()
+            .map(|variant| VariantInfo::from_variant(variant, &None).expect("parse variant"))
+            .collect()
+    }
+
+    #[test]
+    fn detects_mapping_struct_variant() {
+        let variants = parse_variants(
+            r#"
+            enum Example {
+                Mapping {
+                    #[pyo3(item)]
+                    red: u8,
+                    #[pyo3(item)]
+                    green: u8,
+                },
+                Mixed {
+                    #[pyo3(item)]
+                    red: u8,
+                    blue: u8,
+                },
+                TupleVariant(#[pyo3(item)] u8),
+            }
+            "#,
+        );
+        assert!(
+            variants[0].is_mapping,
+            "all #[pyo3(item)] fields should map to TypedDict"
+        );
+        assert!(
+            !variants[1].is_mapping,
+            "missing #[pyo3(item)] breaks mapping detection"
+        );
+        assert!(
+            !variants[2].is_mapping,
+            "tuple variants stay regular classes"
+        );
     }
 }

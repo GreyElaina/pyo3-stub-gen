@@ -18,9 +18,13 @@ pub struct MemberInfo {
     r#type: TypeOrOverride,
     default: Option<Expr>,
     deprecated: Option<crate::gen_stub::attr::DeprecatedInfo>,
+    item: bool,
 }
 
 impl MemberInfo {
+    pub fn is_item(&self) -> bool {
+        self.item
+    }
     pub fn is_getter(attrs: &[Attribute]) -> Result<bool> {
         let attrs = parse_pyo3_attrs(attrs)?;
         Ok(attrs.iter().any(|attr| matches!(attr, Attr::Getter(_))))
@@ -69,6 +73,7 @@ impl MemberInfo {
                         .expect("Getter must return a type"),
                     default,
                     deprecated: crate::gen_stub::attr::extract_deprecated(attrs),
+                    item: false,
                 });
             }
         }
@@ -115,6 +120,7 @@ impl MemberInfo {
                     r#type,
                     default,
                     deprecated: crate::gen_stub::attr::extract_deprecated(attrs),
+                    item: false,
                 });
             }
         }
@@ -137,6 +143,7 @@ impl MemberInfo {
             r#type: extract_return_type(&sig.output, attrs)?.expect("Getter must return a type"),
             default,
             deprecated: crate::gen_stub::attr::extract_deprecated(attrs),
+            item: false,
         })
     }
     pub fn new_classattr_const(item: ImplItemConst) -> Result<Self> {
@@ -161,6 +168,7 @@ impl MemberInfo {
             r#type: TypeOrOverride::RustType { r#type: ty },
             default: Some(expr),
             deprecated: crate::gen_stub::attr::extract_deprecated(&attrs),
+            item: false,
         })
     }
 }
@@ -172,9 +180,12 @@ impl TryFrom<Field> for MemberInfo {
             ident, ty, attrs, ..
         } = field;
         let mut field_name = None;
+        let mut is_item = false;
         for attr in parse_pyo3_attrs(&attrs)? {
-            if let Attr::Name(name) = attr {
-                field_name = Some(name);
+            match attr {
+                Attr::Name(name) => field_name = Some(name),
+                Attr::Item => is_item = true,
+                _ => {}
             }
         }
         let doc = extract_documents(&attrs).join("\n");
@@ -186,6 +197,7 @@ impl TryFrom<Field> for MemberInfo {
             doc,
             default,
             deprecated,
+            item: is_item,
         })
     }
 }
@@ -198,6 +210,7 @@ impl ToTokens for MemberInfo {
             doc,
             default,
             deprecated,
+            item,
         } = self;
         let default = default
             .as_ref()
@@ -242,6 +255,7 @@ impl ToTokens for MemberInfo {
                     doc: #doc,
                     default: #default,
                     deprecated: #deprecated_info,
+                    item: #item,
                 }
             }),
             TypeOrOverride::OverrideType {
@@ -255,6 +269,7 @@ impl ToTokens for MemberInfo {
                         doc: #doc,
                         default: #default,
                         deprecated: #deprecated_info,
+                        item: #item,
                     }
                 })
             }

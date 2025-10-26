@@ -182,6 +182,7 @@ mod test {
                     doc: "",
                     default: None,
                     deprecated: None,
+                    item: false,
                 },
                 ::pyo3_stub_gen::type_info::MemberInfo {
                     name: "ndim",
@@ -189,6 +190,7 @@ mod test {
                     doc: "",
                     default: None,
                     deprecated: None,
+                    item: false,
                 },
                 ::pyo3_stub_gen::type_info::MemberInfo {
                     name: "description",
@@ -196,6 +198,7 @@ mod test {
                     doc: "",
                     default: None,
                     deprecated: None,
+                    item: false,
                 },
             ],
             setters: &[],

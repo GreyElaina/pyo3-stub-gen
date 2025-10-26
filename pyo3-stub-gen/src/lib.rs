@@ -43,6 +43,7 @@
 //!                 doc: "Name docstring",
 //!                 default: None,
 //!                 deprecated: None,
+//!                 item: false,
 //!             },
 //!             MemberInfo {
 //!                 name: "description",
@@ -50,6 +51,7 @@
 //!                 doc: "Description docstring",
 //!                 default: None,
 //!                 deprecated: None,
+//!                 item: false,
 //!             },
 //!         ],
 //!
