@@ -116,6 +116,30 @@ impl MyClass {
 }
 ```
 
+### `#[gen_stub(allow)]`
+
+When you prefer an allow-list style workflow, annotate the members you want to expose with `#[gen_stub(allow)]`. As soon as an `#[gen_stub_pymethods]` block contains at least one `allow` annotation, only those marked items are emitted in the generated stub file.
+
+```rust
+use pyo3::prelude::*;
+use pyo3_stub_gen::derive::*;
+
+#[gen_stub_pyclass]
+#[pyclass]
+struct MyClass;
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl MyClass {
+    #[gen_stub(allow)]
+    fn public_api(&self) {}
+
+    fn internal_helper(&self) {}
+}
+```
+
+In this example, only the `public_api` method appears in the generated `.pyi` file.
+
 ### `#[gen_stub(default=xx)]`
 
 For getters, setters, and class attributes, you can specify default values that will appear in the stub file:

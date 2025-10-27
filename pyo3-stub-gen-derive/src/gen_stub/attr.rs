@@ -291,6 +291,8 @@ pub enum StubGenAttr {
     Default(Expr),
     /// Skip a function in #[pymethods]
     Skip,
+    /// Allow a function when whitelist mode is active
+    Allow,
     /// Override the python type for a function argument or return type
     OverrideType(OverrideTypeAttribute),
     /// Type checker rules to ignore for this function/method
@@ -330,14 +332,21 @@ pub fn parse_gen_stub_default(attrs: &[Attribute]) -> Result<Option<Expr>> {
     Ok(None)
 }
 pub fn parse_gen_stub_skip(attrs: &[Attribute]) -> Result<bool> {
-    let skip = parse_gen_stub_attrs(
+    let attrs = parse_gen_stub_attrs(
         attrs,
         AttributeLocation::Field,
-        Some(&["override_return_type", "default"]),
-    )?
-    .iter()
-    .any(|attr| matches!(attr, StubGenAttr::Skip));
-    Ok(skip)
+        Some(&["override_return_type", "default", "allow"]),
+    )?;
+    Ok(attrs.iter().any(|attr| matches!(attr, StubGenAttr::Skip)))
+}
+
+pub fn parse_gen_stub_allow(attrs: &[Attribute]) -> Result<bool> {
+    let attrs = parse_gen_stub_attrs(
+        attrs,
+        AttributeLocation::Field,
+        Some(&["override_return_type", "default", "skip"]),
+    )?;
+    Ok(attrs.iter().any(|attr| matches!(attr, StubGenAttr::Allow)))
 }
 
 pub fn parse_gen_stub_type_ignore(attrs: &[Attribute]) -> Result<Option<IgnoreTarget>> {
@@ -393,6 +402,10 @@ fn parse_gen_stub_attr(
                 } else if ident == "skip" && (location == AttributeLocation::Field || ignored_ident)
                 {
                     gen_stub_attrs.push(StubGenAttr::Skip);
+                } else if ident == "allow"
+                    && (location == AttributeLocation::Field || ignored_ident)
+                {
+                    gen_stub_attrs.push(StubGenAttr::Allow);
                 } else if ident == "default"
                     && input.peek(Token![=])
                     && (location == AttributeLocation::Field || location == AttributeLocation::Function || ignored_ident)
@@ -443,6 +456,11 @@ fn parse_gen_stub_attr(
                         ident.span(),
                         "`skip` is only valid in field position".to_string(),
                     ));
+                } else if ident == "allow" {
+                    return Err(syn::Error::new(
+                        ident.span(),
+                        "`allow` is only valid in field position".to_string(),
+                    ));
                 } else if ident == "default" {
                     return Err(syn::Error::new(
                         ident.span(),
@@ -461,7 +479,7 @@ fn parse_gen_stub_attr(
                 } else if location == AttributeLocation::Field {
                     return Err(syn::Error::new(
                         ident.span(),
-                        format!("Unsupported keyword `{ident}`, valid is `default=xxx`, `skip`, `override_return_type(...)`, `type_ignore`, or `type_ignore=[...]`"),
+                        format!("Unsupported keyword `{ident}`, valid is `default=xxx`, `skip`, `allow`, `override_return_type(...)`, `type_ignore`, or `type_ignore=[...]`"),
                     ));
                 } else if location == AttributeLocation::Function {
                     return Err(syn::Error::new(
@@ -624,6 +642,8 @@ mod test {
                 pub field1: String,
                 #[gen_stub(default = 1+2)]
                 pub field2: usize,
+                #[gen_stub(allow)]
+                pub field3: usize,
             }
             "#,
         )?;
@@ -646,6 +666,8 @@ mod test {
         } else {
             panic!("attr should be Default");
         };
+        let field3_attrs = parse_gen_stub_attrs(&fields[3].attrs, AttributeLocation::Field, None)?;
+        assert_eq!(field3_attrs, vec![StubGenAttr::Allow]);
         Ok(())
     }
     #[test]

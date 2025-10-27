@@ -2,7 +2,10 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{Error, FnArg, ImplItem, ItemImpl, Result, Type};
 
-use super::{attr::parse_gen_stub_skip, MemberInfo, MethodInfo};
+use super::{
+    attr::{parse_gen_stub_allow, parse_gen_stub_skip},
+    MemberInfo, MethodInfo,
+};
 
 #[derive(Debug)]
 pub struct PyMethodsInfo {
@@ -21,10 +24,27 @@ impl TryFrom<ItemImpl> for PyMethodsInfo {
         let mut getters = Vec::new();
         let mut setters = Vec::new();
         let mut methods = Vec::new();
+
+        let mut whitelist_mode = false;
+        for inner in item.items.iter() {
+            let has_allow = match inner {
+                ImplItem::Const(item_const) => parse_gen_stub_allow(&item_const.attrs)?,
+                ImplItem::Fn(item_fn) => parse_gen_stub_allow(&item_fn.attrs)?,
+                _ => false,
+            };
+            if has_allow {
+                whitelist_mode = true;
+                break;
+            }
+        }
+
         for inner in item.items.into_iter() {
             match inner {
                 ImplItem::Const(item_const) => {
                     if parse_gen_stub_skip(&item_const.attrs)? {
+                        continue;
+                    }
+                    if whitelist_mode && !parse_gen_stub_allow(&item_const.attrs)? {
                         continue;
                     }
                     if MemberInfo::is_classattr(&item_const.attrs)? {
@@ -33,6 +53,9 @@ impl TryFrom<ItemImpl> for PyMethodsInfo {
                 }
                 ImplItem::Fn(item_fn) => {
                     if parse_gen_stub_skip(&item_fn.attrs)? {
+                        continue;
+                    }
+                    if whitelist_mode && !parse_gen_stub_allow(&item_fn.attrs)? {
                         continue;
                     }
                     if MemberInfo::is_getter(&item_fn.attrs)? {
