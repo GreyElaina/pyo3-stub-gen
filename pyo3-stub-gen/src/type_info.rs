@@ -125,6 +125,7 @@ pub struct MethodInfo {
     pub is_async: bool,
     pub deprecated: Option<DeprecatedInfo>,
     pub type_ignored: Option<IgnoreTarget>,
+    pub is_abstract: bool,
 }
 
 /// Info of getter method decorated with `#[getter]` or `#[pyo3(get, set)]` appears in `#[pyclass]`
@@ -136,6 +137,7 @@ pub struct MemberInfo {
     pub default: Option<fn() -> String>,
     pub deprecated: Option<DeprecatedInfo>,
     pub item: bool,
+    pub is_abstract: bool,
 }
 
 /// Info of `#[pymethod]`
@@ -182,6 +184,9 @@ pub struct PyClassInfo {
     pub has_str: bool,
     /// Whether the class has subclass attribute `#[pyclass(subclass)]`
     pub subclass: bool,
+    /// Whether the class should be treated as abstract via `#[gen_stub(abstract_class)]`
+    /// (or `#[gen_stub(r#abstract)]` using a raw identifier)
+    pub is_abstract: bool,
 }
 
 inventory::collect!(PyClassInfo);

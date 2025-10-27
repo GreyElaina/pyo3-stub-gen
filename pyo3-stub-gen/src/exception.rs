@@ -36,6 +36,7 @@ macro_rules! create_exception {
                 has_hash: false,
                 has_str: false,
                 subclass: true,
+                is_abstract: false,
             }
         }
     };

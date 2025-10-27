@@ -13,6 +13,7 @@ pub struct MemberDef {
     pub doc: &'static str,
     pub default: Option<String>,
     pub deprecated: Option<DeprecatedInfo>,
+    pub is_abstract: bool,
 }
 
 impl Import for MemberDef {
@@ -21,6 +22,9 @@ impl Import for MemberDef {
         // Add typing_extensions import if deprecated
         if self.deprecated.is_some() {
             import.insert("typing_extensions".into());
+        }
+        if self.is_abstract {
+            import.insert("abc".into());
         }
         import
     }
@@ -34,6 +38,7 @@ impl From<&MemberInfo> for MemberDef {
             doc: info.doc,
             default: info.default.map(|f| f()),
             deprecated: info.deprecated.clone(),
+            is_abstract: info.is_abstract,
         }
     }
 }
@@ -70,11 +75,11 @@ impl fmt::Display for GetterDisplay<'_> {
         if let Some(deprecated) = &self.0.deprecated {
             writeln!(f, "{indent}{deprecated}")?;
         }
-        write!(
-            f,
-            "{indent}@property\n{indent}def {}(self) -> {}:",
-            self.0.name, self.0.r#type
-        )?;
+        writeln!(f, "{indent}@property")?;
+        if self.0.is_abstract {
+            writeln!(f, "{indent}@abc.abstractmethod")?;
+        }
+        write!(f, "{indent}def {}(self) -> {}:", self.0.name, self.0.r#type)?;
         let doc = if let Some(default) = &self.0.default {
             if default == "..." {
                 Cow::Borrowed(self.0.doc)
@@ -102,6 +107,9 @@ impl fmt::Display for SetterDisplay<'_> {
         let indent = indent();
         // Write setter decorator first, then deprecated decorator
         writeln!(f, "{indent}@{}.setter", self.0.name)?;
+        if self.0.is_abstract {
+            writeln!(f, "{indent}@abc.abstractmethod")?;
+        }
         if let Some(deprecated) = &self.0.deprecated {
             writeln!(f, "{indent}{deprecated}")?;
         }
@@ -129,5 +137,38 @@ impl fmt::Display for SetterDisplay<'_> {
         } else {
             writeln!(f, " ...")
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn abstract_getter_includes_decorator() {
+        let member = MemberDef {
+            name: "value",
+            r#type: TypeInfo::builtin("int"),
+            doc: "",
+            default: None,
+            deprecated: None,
+            is_abstract: true,
+        };
+        let rendered = format!("{}", GetterDisplay(&member));
+        assert!(rendered.contains("@abc.abstractmethod"));
+    }
+
+    #[test]
+    fn abstract_setter_includes_decorator() {
+        let member = MemberDef {
+            name: "value",
+            r#type: TypeInfo::builtin("int"),
+            doc: "",
+            default: None,
+            deprecated: None,
+            is_abstract: true,
+        };
+        let rendered = format!("{}", SetterDisplay(&member));
+        assert!(rendered.contains("@abc.abstractmethod"));
     }
 }

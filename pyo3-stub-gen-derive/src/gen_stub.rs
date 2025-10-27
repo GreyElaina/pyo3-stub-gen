@@ -19,6 +19,7 @@
 //!                 default: None,
 //!                 deprecated: None,
 //!                 item: false,
+//!                 is_abstract: false,
 //!             },
 //!             MemberInfo {
 //!                 name: "ndim",
@@ -27,6 +28,7 @@
 //!                 default: None,
 //!                 deprecated: None,
 //!                 item: false,
+//!                 is_abstract: false,
 //!             },
 //!             MemberInfo {
 //!                 name: "description",
@@ -35,6 +37,7 @@
 //!                 default: None,
 //!                 deprecated: None,
 //!                 item: false,
+//!                 is_abstract: false,
 //!             },
 //!         ],
 //!         setters: &[],
@@ -45,6 +48,7 @@
 //!         has_hash: false,
 //!         has_str: false,
 //!         subclass: false,
+//!         is_abstract: false,
 //!     }
 //! }
 //! ```

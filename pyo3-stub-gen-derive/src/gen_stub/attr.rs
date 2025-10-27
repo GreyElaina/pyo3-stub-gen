@@ -297,6 +297,10 @@ pub enum StubGenAttr {
     OverrideType(OverrideTypeAttribute),
     /// Type checker rules to ignore for this function/method
     TypeIgnore(IgnoreTarget),
+    /// Mark a class as abstract
+    AbstractClass,
+    /// Mark a method as abstract
+    AbstractMethod,
 }
 
 pub fn prune_attrs(attrs: &mut Vec<Attribute>) {
@@ -335,7 +339,7 @@ pub fn parse_gen_stub_skip(attrs: &[Attribute]) -> Result<bool> {
     let attrs = parse_gen_stub_attrs(
         attrs,
         AttributeLocation::Field,
-        Some(&["override_return_type", "default", "allow"]),
+        Some(&["override_return_type", "default", "allow", "abstractmethod"]),
     )?;
     Ok(attrs.iter().any(|attr| matches!(attr, StubGenAttr::Skip)))
 }
@@ -344,7 +348,7 @@ pub fn parse_gen_stub_allow(attrs: &[Attribute]) -> Result<bool> {
     let attrs = parse_gen_stub_attrs(
         attrs,
         AttributeLocation::Field,
-        Some(&["override_return_type", "default", "skip"]),
+        Some(&["override_return_type", "default", "skip", "abstractmethod"]),
     )?;
     Ok(attrs.iter().any(|attr| matches!(attr, StubGenAttr::Allow)))
 }
@@ -357,12 +361,30 @@ pub fn parse_gen_stub_type_ignore(attrs: &[Attribute]) -> Result<Option<IgnoreTa
         }
     }
     // Try Field location (for methods in #[pymethods] blocks)
-    for attr in parse_gen_stub_attrs(attrs, AttributeLocation::Field, None)? {
+    for attr in parse_gen_stub_attrs(attrs, AttributeLocation::Field, Some(&["abstractmethod"]))? {
         if let StubGenAttr::TypeIgnore(target) = attr {
             return Ok(Some(target));
         }
     }
     Ok(None)
+}
+
+pub fn parse_gen_stub_is_abstract_class(attrs: &[Attribute]) -> Result<bool> {
+    let attrs = parse_gen_stub_attrs(attrs, AttributeLocation::Class, None)?;
+    Ok(attrs
+        .iter()
+        .any(|attr| matches!(attr, StubGenAttr::AbstractClass)))
+}
+
+pub fn parse_gen_stub_is_abstract_method(attrs: &[Attribute]) -> Result<bool> {
+    let attrs = parse_gen_stub_attrs(
+        attrs,
+        AttributeLocation::Function,
+        Some(&["override_return_type", "default", "type_ignore"]),
+    )?;
+    Ok(attrs
+        .iter()
+        .any(|attr| matches!(attr, StubGenAttr::AbstractMethod)))
 }
 
 fn parse_gen_stub_attrs(
@@ -440,6 +462,14 @@ fn parse_gen_stub_attr(
                         // No equals sign means catch-all
                         gen_stub_attrs.push(StubGenAttr::TypeIgnore(IgnoreTarget::All));
                     }
+                } else if (ident == "abstract" || ident == "abstract_class")
+                    && (location == AttributeLocation::Class || ignored_ident)
+                {
+                    gen_stub_attrs.push(StubGenAttr::AbstractClass);
+                } else if ident == "abstractmethod"
+                    && (location == AttributeLocation::Function || ignored_ident)
+                {
+                    gen_stub_attrs.push(StubGenAttr::AbstractMethod);
                 } else if ident == "override_type" {
                     return Err(syn::Error::new(
                         ident.span(),
@@ -471,6 +501,17 @@ fn parse_gen_stub_attr(
                         ident.span(),
                         "`type_ignore` or `type_ignore=[...]` is only valid in function or method position".to_string(),
                     ));
+                } else if ident == "abstract" || ident == "abstract_class" {
+                    return Err(syn::Error::new(
+                        ident.span(),
+                        "`abstract` or `abstract_class` is only valid in struct position"
+                            .to_string(),
+                    ));
+                } else if ident == "abstractmethod" {
+                    return Err(syn::Error::new(
+                        ident.span(),
+                        "`abstractmethod` is only valid in function or method position".to_string(),
+                    ));
                 } else if location == AttributeLocation::Argument {
                     return Err(syn::Error::new(
                         ident.span(),
@@ -486,6 +527,13 @@ fn parse_gen_stub_attr(
                         ident.span(),
                         format!(
                             "Unsupported keyword `{ident}`, valid is `default=xxx`, `override_return_type(...)`, `type_ignore`, or `type_ignore=[...]`"
+                        ),
+                    ));
+                } else if location == AttributeLocation::Class {
+                    return Err(syn::Error::new(
+                        ident.span(),
+                        format!(
+                            "Unsupported keyword `{ident}`, valid is `abstract` or `abstract_class`"
                         ),
                     ));
                 } else {
@@ -511,6 +559,7 @@ pub(crate) enum AttributeLocation {
     Argument,
     Field,
     Function,
+    Class,
 }
 
 #[derive(Debug, Clone, PartialEq)]

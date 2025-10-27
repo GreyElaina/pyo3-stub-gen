@@ -44,6 +44,7 @@
 //!                 default: None,
 //!                 deprecated: None,
 //!                 item: false,
+//!                 is_abstract: false,
 //!             },
 //!             MemberInfo {
 //!                 name: "description",
@@ -52,6 +53,7 @@
 //!                 default: None,
 //!                 deprecated: None,
 //!                 item: false,
+//!                 is_abstract: false,
 //!             },
 //!         ],
 //!
@@ -70,6 +72,7 @@
 //!         has_str: false,
 //!         // Decorated with `#[pyclass(subclass)]`
 //!         subclass: false,
+//!         is_abstract: false,
 //!     }
 //! }
 //! ```

@@ -94,6 +94,71 @@ define_stub_info_gatherer!(stub_info);
 > [!NOTE]
 > The `#[gen_stub_pyfunction]` macro must be placed before `#[pyfunction]` macro.
 
+### `#[gen_stub(abstractmethod)]`
+
+Mark methods or property accessors as abstract in the generated stubs. This plays nicely with
+PyO3’s descriptors such as `#[classmethod]`, `#[staticmethod]`, `#[getter]`, and `#[setter]`.
+
+```rust
+use pyo3::prelude::*;
+use pyo3_stub_gen::derive::*;
+
+#[gen_stub_pyclass]
+#[pyclass]
+struct Base;
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl Base {
+    #[gen_stub(abstractmethod)]
+    #[classmethod]
+    fn build(_cls: &Bound<'_, PyType>, value: i32) -> Self {
+        Self
+    }
+
+    #[gen_stub(abstractmethod)]
+    #[staticmethod]
+    fn helper(arg: &str) {
+        let _ = arg;
+    }
+
+    #[gen_stub(abstractmethod)]
+    #[pyo3(get)]
+    fn value(&self) -> i32 {
+        0
+    }
+
+    #[gen_stub(abstractmethod)]
+    #[pyo3(set)]
+    fn value(&mut self, _val: i32) {}
+}
+```
+
+The generated stub will look like:
+
+```python
+class Base(abc.ABC):
+    @classmethod
+    @abc.abstractmethod
+    def build(cls, value: int) -> Base: ...
+
+    @staticmethod
+    @abc.abstractmethod
+    def helper(arg: str) -> None: ...
+
+    @property
+    @abc.abstractmethod
+    def value(self) -> int: ...
+
+    @value.setter
+    @abc.abstractmethod
+    def value(self, val: int) -> None: ...
+```
+
+Any class containing abstract members automatically inherits from `abc.ABC`, and the required
+`abc` import is added for you.
+
+
 ### `#[gen_stub(skip)]`
 
 For functions or methods that you want to exclude from the generated stub file, use the `#[gen_stub(skip)]` attribute:

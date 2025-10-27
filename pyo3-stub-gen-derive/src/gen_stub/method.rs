@@ -2,8 +2,8 @@ use crate::gen_stub::util::TypeOrOverride;
 
 use super::{
     arg::parse_args, attr::IgnoreTarget, extract_deprecated, extract_documents,
-    extract_return_type, parameter::Parameters, parse_gen_stub_type_ignore, parse_pyo3_attrs,
-    ArgInfo, Attr, DeprecatedInfo, Signature,
+    extract_return_type, parameter::Parameters, parse_gen_stub_is_abstract_method,
+    parse_gen_stub_type_ignore, parse_pyo3_attrs, ArgInfo, Attr, DeprecatedInfo, Signature,
 };
 
 use proc_macro2::TokenStream as TokenStream2;
@@ -30,6 +30,7 @@ pub struct MethodInfo {
     pub(super) is_async: bool,
     pub(super) deprecated: Option<DeprecatedInfo>,
     pub(super) type_ignored: Option<IgnoreTarget>,
+    pub(super) is_abstract: bool,
 }
 
 fn replace_inner(ty: &mut Type, self_: &Type) {
@@ -52,6 +53,27 @@ fn replace_inner(ty: &mut Type, self_: &Type) {
             replace_inner(elem, self_);
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syn::{parse_str, ImplItemFn};
+
+    #[test]
+    fn parse_gen_stub_abstractmethod_sets_flag() -> Result<()> {
+        let item_fn: ImplItemFn = parse_str(
+            r#"
+            #[gen_stub(abstractmethod)]
+            fn abstract_method(&self, value: i32) -> i32 {
+                value
+            }
+            "#,
+        )?;
+        let method = MethodInfo::try_from(item_fn)?;
+        assert!(method.is_abstract);
+        Ok(())
     }
 }
 
@@ -92,6 +114,7 @@ impl TryFrom<ImplItemFn> for MethodInfo {
         let doc = extract_documents(&attrs).join("\n");
         let deprecated = extract_deprecated(&attrs);
         let type_ignored = parse_gen_stub_type_ignore(&attrs)?;
+        let is_abstract = parse_gen_stub_is_abstract_method(&attrs)?;
         let pyo3_attrs = parse_pyo3_attrs(&attrs)?;
         let mut method_name = None;
         let mut text_sig = Signature::overriding_operator(&sig);
@@ -130,6 +153,7 @@ impl TryFrom<ImplItemFn> for MethodInfo {
             is_async: sig.asyncness.is_some(),
             deprecated,
             type_ignored,
+            is_abstract,
         })
     }
 }
@@ -145,6 +169,7 @@ impl ToTokens for MethodInfo {
             is_async,
             deprecated,
             type_ignored,
+            is_abstract,
         } = self;
 
         let ret_tt = if let Some(ret) = ret {
@@ -202,6 +227,7 @@ impl ToTokens for MethodInfo {
                 is_async: #is_async,
                 deprecated: #deprecated_tt,
                 type_ignored: #type_ignored_tt,
+                is_abstract: #is_abstract,
             }
         })
     }

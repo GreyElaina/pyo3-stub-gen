@@ -25,6 +25,7 @@ pub struct ClassDef {
     pub classes: Vec<ClassDef>,
     pub match_args: Option<Vec<String>>,
     pub subclass: bool,
+    pub is_abstract: bool,
 }
 
 impl Import for ClassDef {
@@ -33,6 +34,9 @@ impl Import for ClassDef {
         if !self.subclass {
             // for @typing.final
             import.insert("typing".into());
+        }
+        if self.is_abstract {
+            import.insert("abc".into());
         }
         for base in &self.bases {
             import.extend(base.import.clone());
@@ -83,6 +87,7 @@ impl From<&PyComplexEnumInfo> for ClassDef {
             match_args: None,
             attrs: Vec::new(),
             subclass: true, // Complex enums can be subclassed by their variants
+            is_abstract: false,
         };
 
         enum_info
@@ -105,6 +110,7 @@ impl ClassDef {
                 )],
                 match_args: None,
                 subclass: true,
+                is_abstract: false,
             };
         }
         let methods = get_variant_methods(enum_info, info);
@@ -123,6 +129,7 @@ impl ClassDef {
             match_args: Some(info.fields.iter().map(|f| f.name.to_string()).collect()),
             attrs: Vec::new(),
             subclass: false,
+            is_abstract: false,
         }
     }
 }
@@ -143,6 +150,7 @@ impl From<&PyClassInfo> for ClassDef {
                 doc: setter.doc,
                 default: setter.default.map(|f| f()),
                 deprecated: setter.deprecated.clone(),
+                is_abstract: setter.is_abstract,
             });
         }
         let mut new = Self {
@@ -154,8 +162,15 @@ impl From<&PyClassInfo> for ClassDef {
             classes: Vec::new(),
             bases: info.bases.iter().map(|f| f()).collect(),
             match_args: None,
-            subclass: info.subclass,
+            subclass: info.subclass || info.is_abstract,
+            is_abstract: info.is_abstract,
         };
+        if new.getter_setters.values().any(|(getter, setter)| {
+            getter.as_ref().is_some_and(|m| m.is_abstract)
+                || setter.as_ref().is_some_and(|m| m.is_abstract)
+        }) {
+            new.mark_abstract();
+        }
         if info.has_eq {
             new.add_eq_method();
         }
@@ -168,10 +183,22 @@ impl From<&PyClassInfo> for ClassDef {
         if info.has_str {
             new.add_str_method();
         }
+        if info.is_abstract {
+            new.mark_abstract();
+        }
         new
     }
 }
 impl ClassDef {
+    pub(crate) fn mark_abstract(&mut self) {
+        self.is_abstract = true;
+        self.subclass = true;
+        if !self.bases.iter().any(|base| base.name == "abc.ABC") {
+            self.bases
+                .push(TypeInfo::with_module("abc.ABC", ModuleRef::from("abc")));
+        }
+    }
+
     fn add_eq_method(&mut self) {
         let method = MethodDef {
             name: "__eq__",
@@ -190,6 +217,7 @@ impl ClassDef {
             is_async: false,
             deprecated: None,
             type_ignored: None,
+            is_abstract: false,
         };
         self.methods
             .entry("__eq__".to_string())
@@ -218,6 +246,7 @@ impl ClassDef {
                 is_async: false,
                 deprecated: None,
                 type_ignored: None,
+                is_abstract: false,
             };
             self.methods
                 .entry(name.to_string())
@@ -236,6 +265,7 @@ impl ClassDef {
             is_async: false,
             deprecated: None,
             type_ignored: None,
+            is_abstract: false,
         };
         self.methods
             .entry("__hash__".to_string())
@@ -253,6 +283,7 @@ impl ClassDef {
             is_async: false,
             deprecated: None,
             type_ignored: None,
+            is_abstract: false,
         };
         self.methods
             .entry("__str__".to_string())
@@ -351,6 +382,7 @@ mod tests {
                 default: None,
                 deprecated: None,
                 item: true,
+                is_abstract: false,
             },
             MemberInfo {
                 name: "green",
@@ -359,6 +391,7 @@ mod tests {
                 default: None,
                 deprecated: None,
                 item: true,
+                is_abstract: false,
             },
         ]);
         let variant = Box::leak(Box::new(VariantInfo {
@@ -394,6 +427,7 @@ mod tests {
                 default: None,
                 deprecated: None,
                 item: false,
+                is_abstract: false,
             },
             MemberInfo {
                 name: "green",
@@ -402,6 +436,7 @@ mod tests {
                 default: None,
                 deprecated: None,
                 item: false,
+                is_abstract: false,
             },
         ]);
         let variant = Box::leak(Box::new(VariantInfo {
@@ -448,5 +483,66 @@ mod tests {
         assert!(rendered.contains("@typing.final"));
         assert!(rendered.contains("class Struct(ColorInput):"));
         assert!(rendered.contains("__match_args__ = (\"red\", \"green\",)"));
+    }
+
+    #[test]
+    fn abstract_property_marks_class_and_emits_decorator() {
+        fn dummy_struct_id() -> TypeId {
+            TypeId::of::<i32>()
+        }
+        static GETTERS: [MemberInfo; 1] = [MemberInfo {
+            name: "value",
+            r#type: int_type,
+            doc: "",
+            default: None,
+            deprecated: None,
+            item: false,
+            is_abstract: true,
+        }];
+        static SETTERS: [MemberInfo; 0] = [];
+        let info = PyClassInfo {
+            struct_id: dummy_struct_id,
+            pyclass_name: "WithProperty",
+            module: None,
+            doc: "",
+            getters: &GETTERS,
+            setters: &SETTERS,
+            bases: &[],
+            has_eq: false,
+            has_ord: false,
+            has_hash: false,
+            has_str: false,
+            subclass: false,
+            is_abstract: false,
+        };
+        let class_def = ClassDef::from(&info);
+        assert!(class_def.is_abstract);
+        assert!(class_def.bases.iter().any(|base| base.name == "abc.ABC"));
+        let rendered = class_def.to_string();
+        assert!(rendered.contains("@abc.abstractmethod"));
+        assert!(!rendered.contains("@typing.final"));
+    }
+
+    #[test]
+    fn mark_abstract_adds_abc_base_and_skips_final() {
+        let mut class_def = ClassDef {
+            name: "Base",
+            doc: "",
+            attrs: Vec::new(),
+            getter_setters: IndexMap::new(),
+            methods: IndexMap::new(),
+            bases: Vec::new(),
+            classes: Vec::new(),
+            match_args: None,
+            subclass: false,
+            is_abstract: false,
+        };
+        class_def.mark_abstract();
+        assert!(class_def.is_abstract);
+        assert!(class_def.subclass);
+        assert!(class_def.bases.iter().any(|base| base.name == "abc.ABC"));
+        let rendered = class_def.to_string();
+        assert!(rendered.contains("class Base(abc.ABC):"));
+        assert!(!rendered.contains("@typing.final"));
     }
 }

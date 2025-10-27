@@ -124,3 +124,57 @@ pub fn prune_attrs(item_impl: &mut ItemImpl) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syn::parse_quote;
+
+    #[test]
+    fn abstract_classmethod_from_impl() -> Result<()> {
+        let item_impl: ItemImpl = parse_quote! {
+            #[pymethods]
+            impl Foo {
+                #[gen_stub(abstractmethod)]
+                #[classmethod]
+                fn build(_cls: &::pyo3::types::PyType, value: i32) -> Self {
+                    Self
+                }
+            }
+        };
+        let info = PyMethodsInfo::try_from(item_impl)?;
+        assert_eq!(info.methods.len(), 1);
+        let method = &info.methods[0];
+        assert_eq!(method.name, "build");
+        assert!(matches!(
+            method.r#type,
+            crate::gen_stub::method::MethodType::Class
+        ));
+        assert!(method.is_abstract);
+        Ok(())
+    }
+
+    #[test]
+    fn abstract_staticmethod_from_impl() -> Result<()> {
+        let item_impl: ItemImpl = parse_quote! {
+            #[pymethods]
+            impl Foo {
+                #[gen_stub(abstractmethod)]
+                #[staticmethod]
+                fn helper(value: i32) {
+                    let _ = value;
+                }
+            }
+        };
+        let info = PyMethodsInfo::try_from(item_impl)?;
+        assert_eq!(info.methods.len(), 1);
+        let method = &info.methods[0];
+        assert_eq!(method.name, "helper");
+        assert!(matches!(
+            method.r#type,
+            crate::gen_stub::method::MethodType::Static
+        ));
+        assert!(method.is_abstract);
+        Ok(())
+    }
+}

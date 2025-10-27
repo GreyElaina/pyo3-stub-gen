@@ -41,6 +41,8 @@ impl TryFrom<PythonMethodStub> for MethodInfo {
         let deprecated =
             extract_deprecated_from_decorators(&stub.func_stub.func_def.decorator_list);
 
+        let is_abstract = has_abstract_decorator(&stub.func_stub.func_def.decorator_list);
+
         // Construct MethodInfo
         Ok(MethodInfo {
             name: func_name,
@@ -51,6 +53,7 @@ impl TryFrom<PythonMethodStub> for MethodInfo {
             is_async: stub.func_stub.is_async,
             deprecated,
             type_ignored: None,
+            is_abstract,
         })
     }
 }
@@ -241,6 +244,20 @@ fn determine_method_type(func_def: &ast::StmtFunctionDef, args: &ast::Arguments)
     MethodType::Instance
 }
 
+fn has_abstract_decorator(decorators: &[ast::Expr]) -> bool {
+    decorators.iter().any(|decorator| match decorator {
+        ast::Expr::Name(name) => matches!(
+            name.id.as_str(),
+            "abstractmethod" | "abstractclassmethod" | "abstractstaticmethod" | "abstractproperty"
+        ),
+        ast::Expr::Attribute(attr) => matches!(
+            attr.attr.as_str(),
+            "abstractmethod" | "abstractclassmethod" | "abstractstaticmethod" | "abstractproperty"
+        ),
+        _ => false,
+    })
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -283,6 +300,7 @@ mod test {
             is_async: false,
             deprecated: None,
             type_ignored: None,
+            is_abstract: false,
         }
         "###);
         Ok(())
@@ -345,6 +363,7 @@ mod test {
             is_async: false,
             deprecated: None,
             type_ignored: None,
+            is_abstract: false,
         }
         "###);
         Ok(())
@@ -387,8 +406,42 @@ mod test {
             is_async: false,
             deprecated: None,
             type_ignored: None,
+            is_abstract: false,
         }
         "###);
+        Ok(())
+    }
+
+    #[test]
+    fn test_abstract_classmethod_and_staticmethod() -> Result<()> {
+        let stub_str: LitStr = syn::parse2(quote! {
+            r#"
+            import abc
+
+            class Base:
+                @classmethod
+                @abc.abstractmethod
+                def build(cls, value: int) -> "Base":
+                    ...
+
+                @staticmethod
+                @abc.abstractmethod
+                def helper(arg: str) -> None:
+                    ...
+            "#
+        })?;
+        let py_methods_info = parse_python_methods_stub(&stub_str)?;
+        assert_eq!(py_methods_info.methods.len(), 2);
+
+        let classmethod = &py_methods_info.methods[0];
+        assert_eq!(classmethod.name, "build");
+        assert!(matches!(classmethod.r#type, MethodType::Class));
+        assert!(classmethod.is_abstract);
+
+        let staticmethod = &py_methods_info.methods[1];
+        assert_eq!(staticmethod.name, "helper");
+        assert!(matches!(staticmethod.r#type, MethodType::Static));
+        assert!(staticmethod.is_abstract);
         Ok(())
     }
 
@@ -418,6 +471,7 @@ mod test {
             is_async: false,
             deprecated: None,
             type_ignored: None,
+            is_abstract: false,
         }
         "###);
         Ok(())
@@ -468,6 +522,7 @@ mod test {
             is_async: false,
             deprecated: None,
             type_ignored: None,
+            is_abstract: false,
         }
         "###);
         Ok(())
@@ -509,6 +564,52 @@ mod test {
             is_async: true,
             deprecated: None,
             type_ignored: None,
+            is_abstract: false,
+        }
+        "###);
+        Ok(())
+    }
+
+    #[test]
+    fn test_abstract_method_in_class() -> Result<()> {
+        let stub_str: LitStr = syn::parse2(quote! {
+            r#"
+            import abc
+
+            class Base:
+                @abc.abstractmethod
+                def calculate(self, value: int) -> int:
+                    ...
+            "#
+        })?;
+        let py_methods_info = parse_python_methods_stub(&stub_str)?;
+        assert_eq!(py_methods_info.methods.len(), 1);
+
+        let out = py_methods_info.methods[0].to_token_stream();
+        insta::assert_snapshot!(format_as_value(out), @r###"
+        ::pyo3_stub_gen::type_info::MethodInfo {
+            name: "calculate",
+            parameters: &[
+                ::pyo3_stub_gen::type_info::ParameterInfo {
+                    name: "value",
+                    kind: ::pyo3_stub_gen::type_info::ParameterKind::PositionalOrKeyword,
+                    type_info: || ::pyo3_stub_gen::TypeInfo {
+                        name: "int".to_string(),
+                        import: ::std::collections::HashSet::from(["abc".into()]),
+                    },
+                    default: ::pyo3_stub_gen::type_info::ParameterDefault::None,
+                },
+            ],
+            r#return: || ::pyo3_stub_gen::TypeInfo {
+                name: "int".to_string(),
+                import: ::std::collections::HashSet::from(["abc".into()]),
+            },
+            doc: "",
+            r#type: ::pyo3_stub_gen::type_info::MethodType::Instance,
+            is_async: false,
+            deprecated: None,
+            type_ignored: None,
+            is_abstract: true,
         }
         "###);
         Ok(())
@@ -544,6 +645,7 @@ mod test {
             is_async: false,
             deprecated: None,
             type_ignored: None,
+            is_abstract: false,
         }
         "###);
         Ok(())
@@ -696,6 +798,7 @@ mod test {
                     is_async: false,
                     deprecated: None,
                     type_ignored: None,
+                    is_abstract: false,
                 },
             ],
         }

@@ -1,5 +1,8 @@
 use crate::gen_stub::{
-    attr::{parse_gen_stub_default, parse_gen_stub_override_type, OverrideTypeAttribute},
+    attr::{
+        parse_gen_stub_default, parse_gen_stub_is_abstract_method, parse_gen_stub_override_type,
+        OverrideTypeAttribute,
+    },
     extract_documents,
     util::TypeOrOverride,
 };
@@ -19,6 +22,7 @@ pub struct MemberInfo {
     default: Option<Expr>,
     deprecated: Option<crate::gen_stub::attr::DeprecatedInfo>,
     item: bool,
+    is_abstract: bool,
 }
 
 impl MemberInfo {
@@ -58,6 +62,7 @@ impl MemberInfo {
         let ImplItemFn { attrs, sig, .. } = &item;
         let default = parse_gen_stub_default(attrs)?;
         let doc = extract_documents(attrs).join("\n");
+        let is_abstract = parse_gen_stub_is_abstract_method(attrs)?;
         let pyo3_attrs = parse_pyo3_attrs(attrs)?;
         for attr in pyo3_attrs {
             if let Attr::Getter(name) = attr {
@@ -74,6 +79,7 @@ impl MemberInfo {
                     default,
                     deprecated: crate::gen_stub::attr::extract_deprecated(attrs),
                     item: false,
+                    is_abstract,
                 });
             }
         }
@@ -84,6 +90,7 @@ impl MemberInfo {
         let ImplItemFn { attrs, sig, .. } = &item;
         let default = parse_gen_stub_default(attrs)?;
         let doc = extract_documents(attrs).join("\n");
+        let is_abstract = parse_gen_stub_is_abstract_method(attrs)?;
         let pyo3_attrs = parse_pyo3_attrs(attrs)?;
         for attr in pyo3_attrs {
             if let Attr::Setter(name) = attr {
@@ -121,6 +128,7 @@ impl MemberInfo {
                     default,
                     deprecated: crate::gen_stub::attr::extract_deprecated(attrs),
                     item: false,
+                    is_abstract,
                 });
             }
         }
@@ -144,6 +152,7 @@ impl MemberInfo {
             default,
             deprecated: crate::gen_stub::attr::extract_deprecated(attrs),
             item: false,
+            is_abstract: false,
         })
     }
     pub fn new_classattr_const(item: ImplItemConst) -> Result<Self> {
@@ -169,6 +178,7 @@ impl MemberInfo {
             default: Some(expr),
             deprecated: crate::gen_stub::attr::extract_deprecated(&attrs),
             item: false,
+            is_abstract: false,
         })
     }
 }
@@ -198,6 +208,7 @@ impl TryFrom<Field> for MemberInfo {
             default,
             deprecated,
             item: is_item,
+            is_abstract: false,
         })
     }
 }
@@ -211,6 +222,7 @@ impl ToTokens for MemberInfo {
             default,
             deprecated,
             item,
+            is_abstract,
         } = self;
         let default = default
             .as_ref()
@@ -256,6 +268,7 @@ impl ToTokens for MemberInfo {
                     default: #default,
                     deprecated: #deprecated_info,
                     item: #item,
+                    is_abstract: #is_abstract,
                 }
             }),
             TypeOrOverride::OverrideType {
@@ -270,6 +283,7 @@ impl ToTokens for MemberInfo {
                         default: #default,
                         deprecated: #deprecated_info,
                         item: #item,
+                        is_abstract: #is_abstract,
                     }
                 })
             }
@@ -282,5 +296,39 @@ impl From<MemberInfo> for ArgInfo {
         let MemberInfo { name, r#type, .. } = value;
 
         Self { name, r#type }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syn::parse_quote;
+
+    #[test]
+    fn getter_with_gen_stub_abstractmethod_is_marked() -> Result<()> {
+        let item: ImplItemFn = parse_quote! {
+            #[gen_stub(abstractmethod)]
+            #[getter]
+            fn value(&self) -> i32 {
+                unimplemented!()
+            }
+        };
+        let info = MemberInfo::new_getter(item)?;
+        assert!(info.is_abstract);
+        Ok(())
+    }
+
+    #[test]
+    fn setter_with_gen_stub_abstractmethod_is_marked() -> Result<()> {
+        let item: ImplItemFn = parse_quote! {
+            #[gen_stub(abstractmethod)]
+            #[setter]
+            fn set_value(&mut self, value: i32) {
+                let _ = value;
+            }
+        };
+        let info = MemberInfo::new_setter(item)?;
+        assert!(info.is_abstract);
+        Ok(())
     }
 }

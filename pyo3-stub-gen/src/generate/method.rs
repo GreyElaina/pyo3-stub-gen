@@ -16,6 +16,7 @@ pub struct MethodDef {
     pub is_async: bool,
     pub deprecated: Option<DeprecatedInfo>,
     pub type_ignored: Option<IgnoreTarget>,
+    pub is_abstract: bool,
 }
 
 impl Import for MethodDef {
@@ -25,6 +26,9 @@ impl Import for MethodDef {
         // Add typing_extensions import if deprecated
         if self.deprecated.is_some() {
             import.insert("typing_extensions".into());
+        }
+        if self.is_abstract {
+            import.insert("abc".into());
         }
         import
     }
@@ -41,6 +45,7 @@ impl From<&MethodInfo> for MethodDef {
             is_async: info.is_async,
             deprecated: info.deprecated.clone(),
             type_ignored: info.type_ignored,
+            is_abstract: info.is_abstract,
         }
     }
 }
@@ -64,6 +69,9 @@ impl fmt::Display for MethodDef {
         match self.r#type {
             MethodType::Static => {
                 writeln!(f, "{indent}@staticmethod")?;
+                if self.is_abstract {
+                    writeln!(f, "{indent}@abc.abstractmethod")?;
+                }
                 write!(f, "{indent}{async_}def {}({})", self.name, self.parameters)?;
             }
             MethodType::Class | MethodType::New => {
@@ -71,9 +79,15 @@ impl fmt::Display for MethodDef {
                     // new is a classmethod without the decorator
                     writeln!(f, "{indent}@classmethod")?;
                 }
+                if self.is_abstract {
+                    writeln!(f, "{indent}@abc.abstractmethod")?;
+                }
                 write!(f, "{indent}{async_}def {}(cls{})", self.name, params_str)?;
             }
             MethodType::Instance => {
+                if self.is_abstract {
+                    writeln!(f, "{indent}@abc.abstractmethod")?;
+                }
                 write!(f, "{indent}{async_}def {}(self{})", self.name, params_str)?;
             }
         }
@@ -119,5 +133,28 @@ impl fmt::Display for MethodDef {
             writeln!(f)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn abstract_instance_method_renders_decorator() {
+        let method = MethodDef {
+            name: "do_work",
+            parameters: Parameters::new(),
+            r#return: TypeInfo::builtin("int"),
+            doc: "",
+            r#type: MethodType::Instance,
+            is_async: false,
+            deprecated: None,
+            type_ignored: None,
+            is_abstract: true,
+        };
+        let rendered = method.to_string();
+        assert!(rendered.contains("@abc.abstractmethod"));
+        assert!(rendered.contains("def do_work(self"));
     }
 }

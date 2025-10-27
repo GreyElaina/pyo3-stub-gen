@@ -1,4 +1,7 @@
-use super::{extract_documents, parse_pyo3_attrs, util::quote_option, Attr, MemberInfo, StubType};
+use super::{
+    extract_documents, parse_gen_stub_is_abstract_class, parse_pyo3_attrs, util::quote_option,
+    Attr, MemberInfo, StubType,
+};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{parse_quote, Error, ItemStruct, Result, Type};
@@ -16,6 +19,7 @@ pub struct PyClassInfo {
     has_hash: bool,
     has_str: bool,
     subclass: bool,
+    is_abstract: bool,
 }
 
 impl From<&PyClassInfo> for StubType {
@@ -56,6 +60,7 @@ impl TryFrom<ItemStruct> for PyClassInfo {
         let mut has_hash = false;
         let mut has_str = false;
         let mut subclass = false;
+        let is_abstract = parse_gen_stub_is_abstract_class(&attrs)?;
         for attr in parse_pyo3_attrs(&attrs)? {
             match attr {
                 Attr::Name(name) => pyclass_name = Some(name),
@@ -98,6 +103,7 @@ impl TryFrom<ItemStruct> for PyClassInfo {
             has_hash,
             has_str,
             subclass,
+            is_abstract,
         })
     }
 }
@@ -117,6 +123,7 @@ impl ToTokens for PyClassInfo {
             has_hash,
             has_str,
             subclass,
+            is_abstract,
         } = self;
         let module = quote_option(module);
         tokens.append_all(quote! {
@@ -133,6 +140,7 @@ impl ToTokens for PyClassInfo {
                 has_hash: #has_hash,
                 has_str: #has_str,
                 subclass: #subclass,
+                is_abstract: #is_abstract,
             }
         })
     }
@@ -185,6 +193,7 @@ mod test {
                     default: None,
                     deprecated: None,
                     item: false,
+                    is_abstract: false,
                 },
                 ::pyo3_stub_gen::type_info::MemberInfo {
                     name: "ndim",
@@ -193,6 +202,7 @@ mod test {
                     default: None,
                     deprecated: None,
                     item: false,
+                    is_abstract: false,
                 },
                 ::pyo3_stub_gen::type_info::MemberInfo {
                     name: "description",
@@ -201,6 +211,7 @@ mod test {
                     default: None,
                     deprecated: None,
                     item: false,
+                    is_abstract: false,
                 },
             ],
             setters: &[],
@@ -212,6 +223,37 @@ mod test {
             has_hash: false,
             has_str: false,
             subclass: false,
+            is_abstract: false,
+        }
+        "###);
+        Ok(())
+    }
+
+    #[test]
+    fn test_pyclass_abstract() -> Result<()> {
+        let input: ItemStruct = parse_str(
+            r#"
+            #[gen_stub(abstract_class)]
+            #[pyclass(name = "MyAbstract")]
+            pub struct AbstractThing;
+            "#,
+        )?;
+        let out = PyClassInfo::try_from(input)?.to_token_stream();
+        insta::assert_snapshot!(format_as_value(out), @r###"
+        ::pyo3_stub_gen::type_info::PyClassInfo {
+            pyclass_name: "MyAbstract",
+            struct_id: std::any::TypeId::of::<AbstractThing>,
+            getters: &[],
+            setters: &[],
+            module: None,
+            doc: "",
+            bases: &[],
+            has_eq: false,
+            has_ord: false,
+            has_hash: false,
+            has_str: false,
+            subclass: false,
+            is_abstract: true,
         }
         "###);
         Ok(())

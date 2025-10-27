@@ -154,6 +154,7 @@ impl StubInfoBuilder {
                         doc: attr.doc,
                         default: attr.default.map(|f| f()),
                         deprecated: attr.deprecated.clone(),
+                        is_abstract: false,
                     });
                 }
                 for getter in info.getters {
@@ -167,7 +168,11 @@ impl StubInfoBuilder {
                         doc: getter.doc,
                         default: getter.default.map(|f| f()),
                         deprecated: getter.deprecated.clone(),
+                        is_abstract: getter.is_abstract,
                     });
+                    if getter.is_abstract {
+                        entry.mark_abstract();
+                    }
                 }
                 for setter in info.setters {
                     entry
@@ -180,11 +185,22 @@ impl StubInfoBuilder {
                         doc: setter.doc,
                         default: setter.default.map(|f| f()),
                         deprecated: setter.deprecated.clone(),
+                        is_abstract: setter.is_abstract,
                     });
+                    if setter.is_abstract {
+                        entry.mark_abstract();
+                    }
                 }
                 for method in info.methods {
-                    let entries = entry.methods.entry(method.name.to_string()).or_default();
-                    entries.push(MethodDef::from(method));
+                    let method_def = MethodDef::from(method);
+                    if method_def.is_abstract {
+                        entry.mark_abstract();
+                    }
+                    entry
+                        .methods
+                        .entry(method_def.name.to_string())
+                        .or_default()
+                        .push(method_def);
                 }
                 return;
             } else if let Some(entry) = module.enum_.get_mut(&struct_id) {
@@ -195,6 +211,7 @@ impl StubInfoBuilder {
                         doc: attr.doc,
                         default: attr.default.map(|f| f()),
                         deprecated: attr.deprecated.clone(),
+                        is_abstract: false,
                     });
                 }
                 for getter in info.getters {
@@ -204,6 +221,7 @@ impl StubInfoBuilder {
                         doc: getter.doc,
                         default: getter.default.map(|f| f()),
                         deprecated: getter.deprecated.clone(),
+                        is_abstract: getter.is_abstract,
                     });
                 }
                 for setter in info.setters {
@@ -213,6 +231,7 @@ impl StubInfoBuilder {
                         doc: setter.doc,
                         default: setter.default.map(|f| f()),
                         deprecated: setter.deprecated.clone(),
+                        is_abstract: setter.is_abstract,
                     });
                 }
                 for method in info.methods {
