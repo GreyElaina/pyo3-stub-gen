@@ -188,6 +188,14 @@ impl TypeInfo {
         }
     }
 
+    /// Typing ``Self`` type annotation with corresponding import.
+    pub fn self_type() -> Self {
+        Self {
+            name: "Self".to_string(),
+            import: hashset! { "typing".into() },
+        }
+    }
+
     /// A type annotation of a type that must be imported. The type name must be qualified with the module name:
     ///
     /// ```

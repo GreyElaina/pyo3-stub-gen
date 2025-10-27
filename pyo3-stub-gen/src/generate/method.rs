@@ -36,10 +36,14 @@ impl Import for MethodDef {
 
 impl From<&MethodInfo> for MethodDef {
     fn from(info: &MethodInfo) -> Self {
+        let mut return_type = (info.r#return)();
+        if info.r#type == MethodType::New {
+            return_type = TypeInfo::self_type();
+        }
         Self {
             name: info.name,
             parameters: Parameters::from_infos(info.parameters),
-            r#return: (info.r#return)(),
+            r#return: return_type,
             doc: info.doc,
             r#type: info.r#type,
             is_async: info.is_async,

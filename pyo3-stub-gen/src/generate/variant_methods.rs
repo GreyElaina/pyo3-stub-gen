@@ -3,17 +3,14 @@ use indexmap::IndexMap;
 use crate::generate::{MethodDef, MethodType, Parameter, ParameterDefault, Parameters};
 use crate::type_info::{ParameterKind, PyComplexEnumInfo, VariantForm, VariantInfo};
 use crate::TypeInfo;
-use std::collections::HashSet;
 
 pub(super) fn get_variant_methods(
-    enum_info: &PyComplexEnumInfo,
+    _enum_info: &PyComplexEnumInfo,
     info: &VariantInfo,
 ) -> IndexMap<String, Vec<MethodDef>> {
     if info.is_mapping {
         return IndexMap::new();
     }
-    let full_class_name = format!("{}.{}", enum_info.pyclass_name, info.pyclass_name);
-
     let mut methods: IndexMap<String, Vec<MethodDef>> = IndexMap::new();
 
     methods
@@ -22,10 +19,7 @@ pub(super) fn get_variant_methods(
         .push(MethodDef {
             name: "__new__",
             parameters: Parameters::from_infos(info.constr_args),
-            r#return: TypeInfo {
-                name: full_class_name,
-                import: HashSet::new(),
-            },
+            r#return: TypeInfo::self_type(),
             doc: "",
             r#type: MethodType::New,
             is_async: false,
