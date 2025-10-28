@@ -108,3 +108,76 @@ impl fmt::Display for Module {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::stub_type::{self_import_strategy, set_self_import_strategy, SelfImportStrategy};
+    use crate::TypeInfo;
+    use indexmap::IndexMap;
+    use std::any::TypeId;
+
+    fn render_new_method_module() -> String {
+        let mut class = ClassDef {
+            name: "Foo",
+            doc: "",
+            attrs: Vec::new(),
+            getter_setters: IndexMap::new(),
+            methods: IndexMap::new(),
+            classes: Vec::new(),
+            bases: Vec::new(),
+            match_args: None,
+            subclass: false,
+            is_abstract: false,
+        };
+        class
+            .methods
+            .entry("__new__".to_string())
+            .or_default()
+            .push(MethodDef {
+                name: "__new__",
+                parameters: Parameters::new(),
+                r#return: TypeInfo::self_type(),
+                doc: "",
+                r#type: MethodType::New,
+                is_async: false,
+                deprecated: None,
+                type_ignored: None,
+                is_abstract: false,
+            });
+
+        let mut module = Module::default();
+        module.name = "foo".into();
+        module.default_module_name = "foo".into();
+        module.class.insert(TypeId::of::<()>(), class);
+        module.to_string()
+    }
+
+    #[test]
+    fn new_method_uses_self_return_type() {
+        let original = self_import_strategy();
+        set_self_import_strategy(SelfImportStrategy::Typing);
+        let rendered = render_new_method_module();
+        assert!(
+            rendered.contains("from typing import Self"),
+            "expected typing import, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("def __new__(cls) -> Self"),
+            "expected __new__ signature with Self, got:\n{rendered}"
+        );
+        set_self_import_strategy(original);
+    }
+
+    #[test]
+    fn new_method_switches_to_typing_extensions_when_configured() {
+        let original = self_import_strategy();
+        set_self_import_strategy(SelfImportStrategy::TypingExtensions);
+        let rendered = render_new_method_module();
+        assert!(
+            rendered.contains("from typing_extensions import Self"),
+            "expected typing_extensions import, got:\n{rendered}"
+        );
+        set_self_import_strategy(original);
+    }
+}

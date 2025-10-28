@@ -1,4 +1,11 @@
-use crate::{generate::*, pyproject::PyProject, type_info::*};
+#[cfg(test)]
+use crate::stub_type::self_import_strategy;
+use crate::{
+    generate::*,
+    pyproject::PyProject,
+    stub_type::{set_self_import_strategy, SelfImportStrategy},
+    type_info::*,
+};
 use anyhow::{Context, Result};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -11,6 +18,113 @@ use std::{
 pub struct StubInfo {
     pub modules: BTreeMap<String, Module>,
     pub python_root: PathBuf,
+}
+
+fn configure_self_import_strategy_from_requires_python(spec: Option<&str>) {
+    use SelfImportStrategy::{Typing, TypingExtensions};
+
+    if let Some(min_version) = spec.and_then(parse_minimum_python_version) {
+        let strategy = if min_version.0 > 3 || (min_version.0 == 3 && min_version.1 >= 11) {
+            Typing
+        } else {
+            TypingExtensions
+        };
+        set_self_import_strategy(strategy);
+    } else {
+        set_self_import_strategy(Typing);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::stub_type::{set_self_import_strategy, SelfImportStrategy};
+
+    #[test]
+    fn parses_minimum_python_version() {
+        assert_eq!(parse_minimum_python_version(">=3.10"), Some((3, 10)));
+        assert_eq!(parse_minimum_python_version(">=3.8, <3.12"), Some((3, 8)));
+        assert_eq!(parse_minimum_python_version("~=3.11.0"), Some((3, 11)));
+        assert_eq!(parse_minimum_python_version(""), None);
+        assert_eq!(parse_minimum_python_version(">=3"), Some((3, 0)));
+    }
+
+    #[test]
+    fn configure_strategy_defaults_to_typing_when_unspecified() {
+        set_self_import_strategy(SelfImportStrategy::TypingExtensions);
+        configure_self_import_strategy_from_requires_python(None);
+        assert_eq!(self_import_strategy(), SelfImportStrategy::Typing);
+    }
+
+    #[test]
+    fn configure_strategy_prefers_typing_extensions_below_311() {
+        set_self_import_strategy(SelfImportStrategy::Typing);
+        configure_self_import_strategy_from_requires_python(Some(">=3.10"));
+        assert_eq!(self_import_strategy(), SelfImportStrategy::TypingExtensions);
+    }
+
+    #[test]
+    fn configure_strategy_prefers_typing_from_311_onwards() {
+        set_self_import_strategy(SelfImportStrategy::TypingExtensions);
+        configure_self_import_strategy_from_requires_python(Some(">=3.11"));
+        assert_eq!(self_import_strategy(), SelfImportStrategy::Typing);
+    }
+}
+
+fn parse_minimum_python_version(spec: &str) -> Option<(u8, u8)> {
+    let mut minimum: Option<(u8, u8)> = None;
+    for token in spec.split(|c| c == ',' || c == ' ') {
+        let token = token.trim();
+        if token.is_empty() {
+            continue;
+        }
+
+        let candidate = if let Some(rest) = token.strip_prefix(">=") {
+            parse_python_version_fragment(rest)
+        } else if let Some(rest) = token.strip_prefix("==") {
+            parse_python_version_fragment(rest)
+        } else if let Some(rest) = token.strip_prefix("~=") {
+            parse_python_version_fragment(rest)
+        } else {
+            None
+        };
+
+        if let Some(version) = candidate {
+            minimum = Some(match minimum {
+                Some(current) => max_version(current, version),
+                None => version,
+            });
+        }
+    }
+    minimum
+}
+
+fn parse_python_version_fragment(fragment: &str) -> Option<(u8, u8)> {
+    let cleaned = fragment.trim().trim_start_matches('=').trim();
+    let cleaned = cleaned.trim_start_matches('v');
+    let cleaned = cleaned.trim_end_matches(".*");
+    let cleaned = cleaned.trim_end_matches('*');
+
+    let mut parts = cleaned.split('.');
+    let major: u8 = parts.next()?.parse().ok()?;
+    let mut minor_part = parts.next().unwrap_or("0").trim();
+    if let Some(idx) = minor_part.chars().position(|ch| !matches!(ch, '0'..='9')) {
+        minor_part = &minor_part[..idx];
+    }
+    let minor: u8 = if minor_part.is_empty() {
+        0
+    } else {
+        minor_part.parse().ok()?
+    };
+    Some((major, minor))
+}
+
+fn max_version(a: (u8, u8), b: (u8, u8)) -> (u8, u8) {
+    if b.0 > a.0 || (b.0 == a.0 && b.1 > a.1) {
+        b
+    } else {
+        a
+    }
 }
 
 impl StubInfo {
@@ -63,6 +177,9 @@ struct StubInfoBuilder {
 
 impl StubInfoBuilder {
     fn from_pyproject_toml(pyproject: PyProject) -> Self {
+        configure_self_import_strategy_from_requires_python(
+            pyproject.project.requires_python.as_deref(),
+        );
         StubInfoBuilder::from_project_root(
             pyproject.module_name().to_string(),
             pyproject

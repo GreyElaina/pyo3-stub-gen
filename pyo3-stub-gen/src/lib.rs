@@ -184,6 +184,7 @@
 
 pub use inventory;
 pub use pyo3_stub_gen_derive as derive; // re-export to use in generated code
+pub use stub_type::{self_import_strategy, set_self_import_strategy, SelfImportStrategy};
 
 pub mod exception;
 pub mod generate;

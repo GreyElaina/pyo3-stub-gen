@@ -65,6 +65,8 @@ impl PyProject {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Project {
     pub name: String,
+    #[serde(rename = "requires-python")]
+    pub requires_python: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

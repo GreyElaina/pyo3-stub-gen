@@ -13,6 +13,7 @@ mod rust_decimal;
 
 use maplit::hashset;
 use std::cmp::Ordering;
+use std::sync::atomic::{AtomicU8, Ordering as AtomicOrdering};
 use std::{collections::HashSet, fmt, ops};
 
 /// Indicates what to import.
@@ -22,6 +23,33 @@ use std::{collections::HashSet, fmt, ops};
 pub enum ImportRef {
     Module(ModuleRef),
     Type(TypeRef),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum SelfImportStrategy {
+    Typing = 0,
+    TypingExtensions = 1,
+}
+
+static SELF_IMPORT_STRATEGY: AtomicU8 = AtomicU8::new(SelfImportStrategy::Typing as u8);
+
+fn decode_self_import_strategy(value: u8) -> SelfImportStrategy {
+    match value {
+        0 => SelfImportStrategy::Typing,
+        1 => SelfImportStrategy::TypingExtensions,
+        _ => SelfImportStrategy::Typing,
+    }
+}
+
+/// Set the strategy used for importing `Self` annotations in generated stubs.
+pub fn set_self_import_strategy(strategy: SelfImportStrategy) {
+    SELF_IMPORT_STRATEGY.store(strategy as u8, AtomicOrdering::Relaxed);
+}
+
+/// Retrieve the currently configured `Self` import strategy.
+pub fn self_import_strategy() -> SelfImportStrategy {
+    decode_self_import_strategy(SELF_IMPORT_STRATEGY.load(AtomicOrdering::Relaxed))
 }
 
 impl From<&str> for ImportRef {
@@ -190,9 +218,16 @@ impl TypeInfo {
 
     /// Typing ``Self`` type annotation with corresponding import.
     pub fn self_type() -> Self {
+        let module = match self_import_strategy() {
+            SelfImportStrategy::Typing => ModuleRef::from("typing"),
+            SelfImportStrategy::TypingExtensions => ModuleRef::from("typing_extensions"),
+        };
+        let type_ref = TypeRef::new(module, "Self".to_string());
+        let mut import = HashSet::new();
+        import.insert(ImportRef::Type(type_ref));
         Self {
             name: "Self".to_string(),
-            import: hashset! { "typing".into() },
+            import,
         }
     }
 
