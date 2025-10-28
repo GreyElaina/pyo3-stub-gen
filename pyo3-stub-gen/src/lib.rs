@@ -160,6 +160,7 @@
 //!     deprecated: None,
 //!     is_async: false,
 //!     type_ignored: None,
+//!     is_abstract: false,
 //! };
 //!
 //! assert_eq!(

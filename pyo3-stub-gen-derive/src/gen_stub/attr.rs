@@ -345,23 +345,50 @@ pub fn parse_gen_stub_skip(attrs: &[Attribute]) -> Result<bool> {
 }
 
 pub fn parse_gen_stub_allow(attrs: &[Attribute]) -> Result<bool> {
-    let attrs = parse_gen_stub_attrs(
+    let field_attrs = parse_gen_stub_attrs(
         attrs,
         AttributeLocation::Field,
         Some(&["override_return_type", "default", "skip", "abstractmethod"]),
     )?;
-    Ok(attrs.iter().any(|attr| matches!(attr, StubGenAttr::Allow)))
+    if field_attrs
+        .iter()
+        .any(|attr| matches!(attr, StubGenAttr::Allow))
+    {
+        return Ok(true);
+    }
+    let function_attrs = parse_gen_stub_attrs(
+        attrs,
+        AttributeLocation::Function,
+        Some(&[
+            "override_return_type",
+            "default",
+            "skip",
+            "abstractmethod",
+            "type_ignore",
+        ]),
+    )?;
+    Ok(function_attrs
+        .iter()
+        .any(|attr| matches!(attr, StubGenAttr::Allow)))
 }
 
 pub fn parse_gen_stub_type_ignore(attrs: &[Attribute]) -> Result<Option<IgnoreTarget>> {
     // Try Function location first (for regular functions)
-    for attr in parse_gen_stub_attrs(attrs, AttributeLocation::Function, None)? {
+    for attr in parse_gen_stub_attrs(
+        attrs,
+        AttributeLocation::Function,
+        Some(&["abstractmethod", "allow", "skip"]),
+    )? {
         if let StubGenAttr::TypeIgnore(target) = attr {
             return Ok(Some(target));
         }
     }
     // Try Field location (for methods in #[pymethods] blocks)
-    for attr in parse_gen_stub_attrs(attrs, AttributeLocation::Field, Some(&["abstractmethod"]))? {
+    for attr in parse_gen_stub_attrs(
+        attrs,
+        AttributeLocation::Field,
+        Some(&["abstractmethod", "allow", "skip"]),
+    )? {
         if let StubGenAttr::TypeIgnore(target) = attr {
             return Ok(Some(target));
         }
@@ -424,10 +451,17 @@ fn parse_gen_stub_attr(
                 } else if ident == "skip" && (location == AttributeLocation::Field || ignored_ident)
                 {
                     gen_stub_attrs.push(StubGenAttr::Skip);
-                } else if ident == "allow"
-                    && (location == AttributeLocation::Field || ignored_ident)
-                {
-                    gen_stub_attrs.push(StubGenAttr::Allow);
+                } else if ident == "allow" {
+                    if matches!(location, AttributeLocation::Field | AttributeLocation::Function)
+                        || ignored_ident
+                    {
+                        gen_stub_attrs.push(StubGenAttr::Allow);
+                    } else {
+                        return Err(syn::Error::new(
+                            ident.span(),
+                            "`allow` is only valid in field or function position".to_string(),
+                        ));
+                    }
                 } else if ident == "default"
                     && input.peek(Token![=])
                     && (location == AttributeLocation::Field || location == AttributeLocation::Function || ignored_ident)
@@ -489,7 +523,7 @@ fn parse_gen_stub_attr(
                 } else if ident == "allow" {
                     return Err(syn::Error::new(
                         ident.span(),
-                        "`allow` is only valid in field position".to_string(),
+                        "`allow` is only valid in field or function position".to_string(),
                     ));
                 } else if ident == "default" {
                     return Err(syn::Error::new(
@@ -717,6 +751,19 @@ mod test {
         };
         let field3_attrs = parse_gen_stub_attrs(&fields[3].attrs, AttributeLocation::Field, None)?;
         assert_eq!(field3_attrs, vec![StubGenAttr::Allow]);
+        Ok(())
+    }
+
+    #[test]
+    fn allow_attribute_on_function_is_recognized() -> Result<()> {
+        let item_fn: ItemFn = parse_str(
+            r#"
+            #[gen_stub(allow)]
+            fn exported(&self) {}
+            "#,
+        )?;
+        let fn_attrs = parse_gen_stub_attrs(&item_fn.attrs, AttributeLocation::Function, None)?;
+        assert!(fn_attrs.iter().any(|attr| matches!(attr, StubGenAttr::Allow)));
         Ok(())
     }
     #[test]

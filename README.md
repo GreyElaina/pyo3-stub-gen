@@ -101,6 +101,7 @@ PyO3’s descriptors such as `#[classmethod]`, `#[staticmethod]`, `#[getter]`, a
 
 ```rust
 use pyo3::prelude::*;
+use pyo3::types::PyType;
 use pyo3_stub_gen::derive::*;
 
 #[gen_stub_pyclass]
@@ -123,14 +124,14 @@ impl Base {
     }
 
     #[gen_stub(abstractmethod)]
-    #[pyo3(get)]
+    #[getter]
     fn value(&self) -> i32 {
         0
     }
 
     #[gen_stub(abstractmethod)]
-    #[pyo3(set)]
-    fn value(&mut self, _val: i32) {}
+    #[setter(value)]
+    fn set_value(&mut self, _val: i32) {}
 }
 ```
 

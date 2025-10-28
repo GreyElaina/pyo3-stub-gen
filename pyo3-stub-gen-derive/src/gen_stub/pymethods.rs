@@ -177,4 +177,61 @@ mod tests {
         assert!(method.is_abstract);
         Ok(())
     }
+
+    #[test]
+    fn allow_on_getter_enables_whitelist_mode() -> Result<()> {
+        let item_impl: ItemImpl = parse_quote! {
+            #[pymethods]
+            impl Foo {
+                #[gen_stub(allow)]
+                #[getter]
+                fn value(&self) -> i32 {
+                    42
+                }
+
+                #[setter]
+                fn set_value(&mut self, _value: i32) {}
+
+                fn hidden(&self) {}
+            }
+        };
+
+        let info = PyMethodsInfo::try_from(item_impl)?;
+        assert_eq!(info.getters.len(), 1, "expected one getter");
+        assert!(info.setters.is_empty(), "setter should be filtered out");
+        assert!(
+            info.methods.is_empty(),
+            "hidden method should be filtered out"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn allow_on_getter_and_setter_keeps_both() -> Result<()> {
+        let item_impl: ItemImpl = parse_quote! {
+            #[pymethods]
+            impl Foo {
+                #[gen_stub(allow)]
+                #[getter]
+                fn value(&self) -> i32 {
+                    42
+                }
+
+                #[gen_stub(allow)]
+                #[setter]
+                fn set_value(&mut self, _value: i32) {}
+
+                fn hidden(&self) {}
+            }
+        };
+
+        let info = PyMethodsInfo::try_from(item_impl)?;
+        assert_eq!(info.getters.len(), 1, "getter should be kept");
+        assert_eq!(info.setters.len(), 1, "setter should be kept");
+        assert!(
+            info.methods.is_empty(),
+            "hidden method should be filtered out"
+        );
+        Ok(())
+    }
 }
